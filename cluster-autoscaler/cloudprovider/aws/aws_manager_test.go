@@ -453,6 +453,12 @@ func TestBuildNodeFromTemplate(t *testing.T) {
 	assert.Equal(t, int64(5), crValue.Value())
 	_, ipExist := observedNode.Status.Capacity[apiv1.ResourceName(vpcIPKey)]
 	assert.False(t, ipExist)
+	hugePages1GiValue, hugePages1GiExist := observedNode.Status.Capacity[apiv1.ResourceName(apiv1.ResourceHugePagesPrefix+"1Gi")]
+	assert.True(t, hugePages1GiExist)
+	assert.Equal(t, int64(0), hugePages1GiValue.Value())
+	hugePages2MiValue, hugePages2MiExist := observedNode.Status.Capacity[apiv1.ResourceName(apiv1.ResourceHugePagesPrefix+"2Mi")]
+	assert.True(t, hugePages2MiExist)
+	assert.Equal(t, int64(0), hugePages2MiValue.Value())
 
 	// Node with labels
 	GPULabelValue := "nvidia-telsa-v100"
@@ -537,6 +543,31 @@ func TestBuildNodeFromTemplate(t *testing.T) {
 	assert.Equal(t, int64(4), observedVCpuRequirement.Value())
 	observedGpuRequirement := observedNode.Status.Capacity[gpu.ResourceNvidiaGPU]
 	assert.Equal(t, int64(4), observedGpuRequirement.Value())
+}
+
+func TestBuildNodeFromTemplateHugePagesTagOverride(t *testing.T) {
+	awsManager := &AwsManager{}
+	asg := &asg{AwsRef: AwsRef{Name: "test-auto-scaling-group"}}
+	c5Instance := &InstanceType{
+		InstanceType: "c5.xlarge",
+		VCPU:         4,
+		MemoryMb:     8192,
+		GPU:          0,
+	}
+
+	observedNode, observedErr := awsManager.buildNodeFromTemplate(asg, &asgTemplate{
+		InstanceType: c5Instance,
+		Tags: []autoscalingtypes.TagDescription{
+			{
+				Key:   aws.String("k8s.io/cluster-autoscaler/node-template/resources/hugepages-1Gi"),
+				Value: aws.String("2Gi"),
+			},
+		},
+	})
+	assert.NoError(t, observedErr)
+	hugePages1GiValue, hugePages1GiExist := observedNode.Status.Capacity[apiv1.ResourceName(apiv1.ResourceHugePagesPrefix+"1Gi")]
+	assert.True(t, hugePages1GiExist)
+	assert.Equal(t, int64(2*1024*1024*1024), hugePages1GiValue.Value())
 }
 
 func TestExtractLabelsFromAsg(t *testing.T) {

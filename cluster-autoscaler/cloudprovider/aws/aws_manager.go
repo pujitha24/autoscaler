@@ -288,6 +288,13 @@ func (m *AwsManager) buildNodeFromTemplate(asg *asg, template *asgTemplate) (*ap
 	node.Status.Capacity[gpu.ResourceNvidiaGPU] = *resource.NewQuantity(template.InstanceType.GPU, resource.DecimalSI)
 	node.Status.Capacity[apiv1.ResourceMemory] = *resource.NewQuantity(template.InstanceType.MemoryMb*1024*1024, resource.DecimalSI)
 
+	// Kubelet always reports these huge page sizes on the capacity of a real node, even when no huge
+	// pages are configured, so default them here too. Otherwise a scale-from-zero node group's template
+	// node is missing capacity keys that a running node of the same instance type has, which makes
+	// --balance-similar-node-groups treat them as dissimilar.
+	node.Status.Capacity[apiv1.ResourceName(apiv1.ResourceHugePagesPrefix+"1Gi")] = *resource.NewQuantity(0, resource.BinarySI)
+	node.Status.Capacity[apiv1.ResourceName(apiv1.ResourceHugePagesPrefix+"2Mi")] = *resource.NewQuantity(0, resource.BinarySI)
+
 	m.updateCapacityWithRequirementsOverrides(&node.Status.Capacity, asg.MixedInstancesPolicy)
 
 	resourcesFromTags := extractAllocatableResourcesFromAsg(template.Tags)
